@@ -21,7 +21,6 @@ def naked_twins(values):
     Returns:
         the values dictionary with the naked twins eliminated from peers.
     """
-
     # Find all instances of naked twins
     # Eliminate the naked twins as possibilities for their peers
     for unit in unitlist:
@@ -32,7 +31,8 @@ def naked_twins(values):
                 bad_chars = values[box]
                 rgx = re.compile('[%s]' % bad_chars)
                 for other_boxes in set(unit) - {box, box_copy[0]}:
-                    values[other_boxes] = rgx.sub('', values[other_boxes])
+                    # values[other_boxes] = rgx.sub('', values[other_boxes])
+                    values = assign_value(values, other_boxes, rgx.sub('', values[other_boxes]))  # for pygame
     return values
 
 
@@ -53,10 +53,7 @@ def grid_values(grid):
     """
     assert len(grid) == 81
     return {k: v for k, v in
-           zip(boxes,
-               [g if g != '.' else '123456789' for g in grid]
-              )
-           } # dict(zip(boxes, grid))
+           zip(boxes, [g if g != '.' else '123456789' for g in grid])}  # dict(zip(boxes, grid))
 
 
 def display(values):
@@ -70,17 +67,19 @@ def display(values):
     for r in rows:
         print(''.join(values[r+c].center(width)+('|' if c in '36' else '')
                       for c in cols))
-        if r in 'CF': print(line)
+        if r in 'CF':
+            print(line)
     return
 
 
-def eliminate(sudoku_dict):
+def eliminate(values):
     """If a box has single digit then eliminate that digit choice from all the peers"""
-    for box in sudoku_dict.keys():
-        if len(sudoku_dict[box]) == 1: # digits
+    for box in values.keys():
+        if len(values[box]) == 1: # digits
             for peer in peers[box]: # all peers for the box
-                sudoku_dict[peer] = sudoku_dict[peer].replace(sudoku_dict[box], "") # remove digit and replace in dict
-    return sudoku_dict
+                # values[peer] = values[peer].replace(values[box], "") # remove digit and replace in dict
+                values = assign_value(values, peer, values[peer].replace(values[box], ""))  # for pygame
+    return values
 
 
 def only_choice(values):
@@ -96,16 +95,18 @@ def only_choice(values):
         for num in '123456789':
             choices = [box for box in unit if num in values[box]]
             if len(choices) == 1:
-                values[choices[0]] = num
+                # values[choices[0]] = num
+                values = assign_value(values, choices[0], num)  # for pygame
     return values
 
 
 def reduce_puzzle(values):
+    """Applies sudoku solving strategies in a loop and checks if the amount of boxes with determined values have increased
+    Returns new sudoku dictionary when the application of strategies stopped yielding results """
     stalled = False
     while not stalled:
         # Check how many boxes have a determined value
         solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
-
         # Your code here: Use the Eliminate Strategy
         values = eliminate(values)
         # Your code here: Use the Only Choice Strategy
@@ -123,23 +124,24 @@ def reduce_puzzle(values):
 
 
 def search(values):
-    """Using depth-first search and propagation, try all possible values."""
-    # First, reduce the puzzle using the previous function
+    """Using depth-first search and constraint propagation, try all possible values."""
+    # First, reduce the puzzle using the previous function (apply strategies)
     values = reduce_puzzle(values)
     if values is False:
-        return False ## Failed earlier
+        return False  # Failed earlier
     if all(len(values[s]) == 1 for s in boxes):
-        return values ## Solved!
+        return values  # Solved!
     # Choose one of the unfilled squares with the fewest possibilities
     # min function compares first elements of passed lists and outputs a list with minimum 1st element
-    n,s = min((len(values[s]), s) for s in boxes if len(values[s]) > 1)
+    n, s = min((len(values[s]), s) for s in boxes if len(values[s]) > 1)
     # Now use recurrence to solve each one of the resulting sudokus, and
-    for value in values[s]: # recursively explore every option untill we find a solution
+    for value in values[s]:  # recursively explore every option until we find a solution
         new_sudoku = values.copy()
         new_sudoku[s] = value
         attempt = search(new_sudoku)
         if attempt:
-            return attempt
+            return attempt  # This return statement affects only the for loop, to return from the outer function call
+#                             we need to hit return statement outside of the loop
 
 
 def solve(grid):
@@ -151,18 +153,18 @@ def solve(grid):
     Returns:
         The dictionary representation of the final sudoku grid. False if no solution exists.
     """
-
     return search(grid_values(grid))
 
 
 def board(diagonal=True):
+    """Define elements of the board by default assuming the sudoku is diagonal and adding diagonal units to the
+    list of units - practically adding two more constraints """
     rows = 'ABCDEFGHI'
     cols = '123456789'
     boxes = cross(rows, cols)
     row_units = [cross(r, cols) for r in rows]
     column_units = [cross(rows, c) for c in cols]
-    square_units = [cross(rs, cs) for rs in ('ABC','DEF','GHI') for cs in ('123','456','789')]
-
+    square_units = [cross(rs, cs) for rs in ('ABC', 'DEF', 'GHI') for cs in ('123', '456', '789')]
 
     unitlist = row_units + column_units + square_units
 
@@ -170,20 +172,23 @@ def board(diagonal=True):
         diagonal_unit_1 = [row_units[a][b] for a, b in zip(range(0, 9), range(0, 9))]
         diagonal_unit_2 = [row_units[::-1][a][b] for a, b in zip(range(0, 9), range(0, 9))]
         diagonal_units = [diagonal_unit_1, diagonal_unit_2]
-        unitlist = unitlist + diagonal_units
+        unitlist += diagonal_units
 
     units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
     peers = dict((s, set(sum(units[s], [])) - {s}) for s in boxes)  # {} - set literal, executes x2 faster than set()
 
     return rows, cols, units, peers, unitlist, boxes
 
+# ======== Had to put this block here to pass solution tests, however I'd rather set this in a function call in main ===
+"""Define elements of the board by default assuming the sudoku is diagonal and adding diagonal units to the
+    list of units - practically adding two more constraints """
 
 rows = 'ABCDEFGHI'
 cols = '123456789'
 boxes = cross(rows, cols)
 row_units = [cross(r, cols) for r in rows]
 column_units = [cross(rows, c) for c in cols]
-square_units = [cross(rs, cs) for rs in ('ABC','DEF','GHI') for cs in ('123','456','789')]
+square_units = [cross(rs, cs) for rs in ('ABC', 'DEF', 'GHI') for cs in ('123', '456', '789')]
 
 
 unitlist = row_units + column_units + square_units
@@ -193,16 +198,23 @@ if diagonal:
     diagonal_unit_1 = [row_units[a][b] for a, b in zip(range(0, 9), range(0, 9))]
     diagonal_unit_2 = [row_units[::-1][a][b] for a, b in zip(range(0, 9), range(0, 9))]
     diagonal_units = [diagonal_unit_1, diagonal_unit_2]
-    unitlist = unitlist + diagonal_units
+    unitlist += diagonal_units
 
 units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
 peers = dict((s, set(sum(units[s], [])) - {s}) for s in boxes)  # {} - set literal, executes x2 faster than set()
+# ======================================================================================================================
+
 
 if __name__ == '__main__':
 
+    # Define elements of the board
     rows, cols, units, peers, unitlist, boxes = board()
 
     diag_sudoku_grid = '2.............62....1....7...6..8...3...9...7...6..4...4....8....52.............3'
+
+    # Hard sudoku from the web
+    # diag_sudoku_grid = '.....6....59.....82....8....45........3........6..3.54...325..6..................' #
+
     display(solve(diag_sudoku_grid))
 
     try:
