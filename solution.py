@@ -36,6 +36,26 @@ def naked_twins(values):
     return values
 
 
+def hidden_twins(values):
+    for unit in unitlist:
+        for box in unit:
+            box_len = len(values[box])
+            if box_len > 1:  # look only at boxes with more than 1 choice
+                # Check for any combination of 2 digits, to catch 37 and 347, when a pair is separated by another digit
+                # and exclude technical pairs of same digits i.e 11, 33 etc.
+                for pair in [a+b for a, b in cross(values[box], values[box]) if a != b]:
+                    # check how many boxes contain both digits from the pair
+                    pair_boxes = [box for box in unit if pair[0] in values[box] and pair[1] in values[box]]
+                    if len(pair_boxes) == 2:  # if only two boxes contain the pair
+                        other_boxes = set(unit) - {pair_boxes[0], pair_boxes[1]}  # find all ther boxes of the unit
+                        # check that no other boxes have any digits from the pair
+                        if len([box for box in other_boxes if len([num for num in pair if num in values[box]]) != 0]) == 0:
+                            # If all is good update values - leave that pair of digits in "pair_boxes"
+                            for pair_box in pair_boxes:
+                                values[pair_box] = pair
+    return values
+
+
 def cross(A, B):
     """Cross product of elements in A and elements in B."""
     return [x+y for x in A for y in B]
@@ -75,8 +95,8 @@ def display(values):
 def eliminate(values):
     """If a box has single digit then eliminate that digit choice from all the peers"""
     for box in values.keys():
-        if len(values[box]) == 1: # digits
-            for peer in peers[box]: # all peers for the box
+        if len(values[box]) == 1:  # digits
+            for peer in peers[box]:  # all peers for the box
                 # values[peer] = values[peer].replace(values[box], "") # remove digit and replace in dict
                 values = assign_value(values, peer, values[peer].replace(values[box], ""))  # for pygame
     return values
@@ -113,6 +133,8 @@ def reduce_puzzle(values):
         values = only_choice(values)
         # Use naked Twins Strategy
         values = naked_twins(values)
+        #  Use Shadow twins Strategy
+        values = hidden_twins(values)
         # Check how many boxes have a determined value, to compare
         solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
         # If no new values were added, stop the loop.
@@ -204,18 +226,27 @@ units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
 peers = dict((s, set(sum(units[s], [])) - {s}) for s in boxes)  # {} - set literal, executes x2 faster than set()
 # ======================================================================================================================
 
-
 if __name__ == '__main__':
 
     # Define elements of the board
-    rows, cols, units, peers, unitlist, boxes = board()
+    rows, cols, units, peers, unitlist, boxes = board(diagonal=True)
 
+    # Original sudoku from the assignment (9608 assignments to solve)
     diag_sudoku_grid = '2.............62....1....7...6..8...3...9...7...6..4...4....8....52.............3'
 
-    # Hard sudoku from the web
-    # diag_sudoku_grid = '.....6....59.....82....8....45........3........6..3.54...325..6..................' #
+    # Hard sudoku from the web (20470 assignments to solve):
+    # diag_sudoku_grid = '.....6....59.....82....8....45........3........6..3.54...325..6..................'
 
     display(solve(diag_sudoku_grid))
+
+    # The Hardest sudoku? (103358 assignments) Not diagonal - must set diagonal = False in board(False) function:
+    # sudoku_grid = '8..........36......7..9.2...5...7.......457.....1...3...1....68..85...1..9....4..'
+    # sudoku_grid = "....2...7..3.9.2....8......2.5....94.....8.....61......2.6.4...............5...7."
+    # rows, cols, units, peers, unitlist, boxes = board(False)
+    # display(solve(sudoku_grid))
+
+    print(len(assignments))
+    exit()
 
     try:
         from visualize import visualize_assignments
